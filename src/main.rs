@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::{thread_rng, Rng};
 
-const SNEK_SIZE: f32 = 15.0;
+const SNEK_SIZE: f32 = 25.0;
 
 #[derive(Component, Debug, Eq, PartialEq, Copy, Clone)]
 enum Direction {
@@ -60,8 +58,6 @@ fn snek_movement(
 ) {
     for (mut snek, dir, mut transform) in snek_query.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
-            println!("{snek:?} - {dir:?}");
-
             // Meh
             match (dir, snek.direction) {
                 (Direction::Right, Direction::Left) => (),
@@ -129,8 +125,10 @@ fn generate_snacks(mut commands: Commands, snack_query: Query<&Snack>) {
     }
 
     let mut rng = thread_rng();
-    let x: f32 = rng.gen_range(-250.0..250.0);
-    let y: f32 = rng.gen_range(-250.0..250.0);
+    // TODO: Use window bounds
+    // TODO: Dont spawn inside snek
+    let x: f32 = rng.gen_range(-400.0..400.0);
+    let y: f32 = rng.gen_range(-400.0..400.0);
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
@@ -177,14 +175,14 @@ fn eat_snacks(
 }
 
 fn grim_reaper(
-    mut commands: Commands,
-    snek_query: Query<(Entity, &Transform), With<Snek>>,
+    mut timer: ResMut<MoveTimer>,
+    snek_query: Query<&Transform, With<Snek>>,
     snek_block_query: Query<&Transform, With<SnekBlock>>,
 ) {
     if snek_query.is_empty() {
         return;
     }
-    let (entity, snek_loc) = snek_query.single();
+    let snek_loc = snek_query.single();
     snek_block_query.for_each(|block| {
         if let Some(_) = collide(
             snek_loc.translation,
@@ -192,8 +190,7 @@ fn grim_reaper(
             block.translation,
             Vec2::new(block.scale.x, block.scale.y),
         ) {
-            commands.entity(entity).despawn();
-            println!("rip");
+            timer.0.pause();
         }
     })
 }
