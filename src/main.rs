@@ -58,6 +58,7 @@ fn snek_movement(
 ) {
     for (mut snek, dir, mut transform) in snek_query.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
+            println!("{snek:?}");
             // Meh
             match (dir, snek.direction) {
                 (Direction::Right, Direction::Left) => (),
@@ -119,16 +120,20 @@ fn snek_controls(
     }
 }
 
-fn generate_snacks(mut commands: Commands, snack_query: Query<&Snack>) {
+fn generate_snacks(mut commands: Commands, snack_query: Query<&Snack>, windows: Res<Windows>) {
     if !snack_query.is_empty() {
         return;
     }
 
     let mut rng = thread_rng();
-    // TODO: Use window bounds
     // TODO: Dont spawn inside snek
-    let x: f32 = rng.gen_range(-400.0..400.0);
-    let y: f32 = rng.gen_range(-400.0..400.0);
+
+    let win_x = windows.primary().width() / 2.0;
+    let win_y = windows.primary().height() / 2.0;
+
+    let x: f32 = rng.gen_range(-win_x..win_x);
+    let y: f32 = rng.gen_range(-win_y..win_y);
+    println!("Spawning snacks");
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
@@ -162,13 +167,14 @@ fn eat_snacks(
                 snack.translation,
                 Vec2::new(snack.scale.x, snack.scale.y),
             ) {
+                println!("Eating snack");
                 commands.entity(entity).despawn();
                 snek.length += 1;
                 snek_block_query.for_each_mut(|mut block| {
                     block.0 += 1;
                 });
                 let curr_dur = timer.0.duration();
-                timer.0.set_duration(curr_dur.mul_f32(0.95));
+                timer.0.set_duration(curr_dur.mul_f32(0.97));
             }
         }
     }
@@ -190,6 +196,7 @@ fn grim_reaper(
             block.translation,
             Vec2::new(block.scale.x, block.scale.y),
         ) {
+            println!("Game Over");
             timer.0.pause();
         }
     })
