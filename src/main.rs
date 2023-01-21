@@ -170,9 +170,7 @@ fn eat_snacks(
                     block.0 += 1;
                 });
                 let curr_dur = timer.0.duration();
-                timer
-                    .0
-                    .set_duration(curr_dur - Duration::from_secs_f32(0.01));
+                timer.0.set_duration(curr_dur.mul_f32(0.95));
             }
         }
     }
