@@ -1,9 +1,11 @@
+use std::time::Duration;
+
 use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::{thread_rng, Rng};
 
 const SNEK_SIZE: f32 = 15.0;
 
-#[derive(Component, Debug, Eq, PartialEq)]
+#[derive(Component, Debug, Eq, PartialEq, Copy, Clone)]
 enum Direction {
     Up,
     Down,
@@ -56,53 +58,48 @@ fn snek_movement(
     mut snek_query: Query<(&mut Snek, &Direction, &mut Transform)>,
     mut snek_block_query: Query<(Entity, &mut SnekBlock)>,
 ) {
-    if !timer.0.tick(time.delta()).just_finished() {
-        return;
-    }
-
-    for (entity, mut snek_block) in snek_block_query.iter_mut() {
-        if snek_block.0 == 1 {
-            commands.entity(entity).despawn();
-        } else {
-            snek_block.0 -= 1;
-        }
-    }
-
     for (mut snek, dir, mut transform) in snek_query.iter_mut() {
-        commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::BLACK,
-                    custom_size: Some(Vec2::new(SNEK_SIZE, SNEK_SIZE)),
+        if timer.0.tick(time.delta()).just_finished() {
+            println!("{snek:?} - {dir:?}");
+
+            // Meh
+            match (dir, snek.direction) {
+                (Direction::Right, Direction::Left) => (),
+                (Direction::Left, Direction::Right) => (),
+                (Direction::Up, Direction::Down) => (),
+                (Direction::Down, Direction::Up) => (),
+                _ => snek.direction = *dir,
+            }
+
+            let block_location = transform.clone();
+            match snek.direction {
+                Direction::Left => transform.translation.x -= SNEK_SIZE,
+                Direction::Right => transform.translation.x += SNEK_SIZE,
+                Direction::Up => transform.translation.y += SNEK_SIZE,
+                Direction::Down => transform.translation.y -= SNEK_SIZE,
+            };
+
+            commands.spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::BLACK,
+                        custom_size: Some(Vec2::new(SNEK_SIZE, SNEK_SIZE)),
+                        ..default()
+                    },
+                    transform: block_location,
                     ..default()
                 },
-                transform: transform.clone(),
-                ..default()
-            },
-            SnekBlock(snek.length),
-        ));
+                SnekBlock(snek.length),
+            ));
 
-        println!("{snek:?} - {dir:?}");
-
-        if *dir == Direction::Left && snek.direction != Direction::Right {
-            snek.direction = Direction::Left;
+            for (entity, mut snek_block) in snek_block_query.iter_mut() {
+                if snek_block.0 == 1 {
+                    commands.entity(entity).despawn();
+                } else {
+                    snek_block.0 -= 1;
+                }
+            }
         }
-        if *dir == Direction::Right && snek.direction != Direction::Left {
-            snek.direction = Direction::Right;
-        }
-        if *dir == Direction::Up && snek.direction != Direction::Down {
-            snek.direction = Direction::Up;
-        }
-        if *dir == Direction::Down && snek.direction != Direction::Up {
-            snek.direction = Direction::Down;
-        }
-
-        match snek.direction {
-            Direction::Left => transform.translation.x -= SNEK_SIZE,
-            Direction::Right => transform.translation.x += SNEK_SIZE,
-            Direction::Up => transform.translation.y += SNEK_SIZE,
-            Direction::Down => transform.translation.y -= SNEK_SIZE,
-        };
     }
 }
 
@@ -110,7 +107,6 @@ fn snek_controls(
     key_input: Res<Input<KeyCode>>,
     mut snek_dir_query: Query<&mut Direction, With<Snek>>,
 ) {
-    // TODO: move immidiately on keypress
     for mut snek_dir in snek_dir_query.iter_mut() {
         if key_input.just_pressed(KeyCode::Up) {
             *snek_dir = Direction::Up
@@ -154,6 +150,7 @@ fn generate_snacks(mut commands: Commands, snack_query: Query<&Snack>) {
 }
 
 fn eat_snacks(
+    mut timer: ResMut<MoveTimer>,
     mut commands: Commands,
     mut snek_block_query: Query<&mut SnekBlock>,
     mut snek_query: Query<(&mut Snek, &Transform)>,
@@ -172,9 +169,35 @@ fn eat_snacks(
                 snek_block_query.for_each_mut(|mut block| {
                     block.0 += 1;
                 });
+                let curr_dur = timer.0.duration();
+                timer
+                    .0
+                    .set_duration(curr_dur - Duration::from_secs_f32(0.01));
             }
         }
     }
+}
+
+fn grim_reaper(
+    mut commands: Commands,
+    snek_query: Query<(Entity, &Transform), With<Snek>>,
+    snek_block_query: Query<&Transform, With<SnekBlock>>,
+) {
+    if snek_query.is_empty() {
+        return;
+    }
+    let (entity, snek_loc) = snek_query.single();
+    snek_block_query.for_each(|block| {
+        if let Some(_) = collide(
+            snek_loc.translation,
+            Vec2::new(snek_loc.scale.x, snek_loc.scale.y),
+            block.translation,
+            Vec2::new(block.scale.x, block.scale.y),
+        ) {
+            commands.entity(entity).despawn();
+            println!("rip");
+        }
+    })
 }
 
 fn main() {
@@ -188,5 +211,6 @@ fn main() {
         .add_system(snek_movement)
         .add_system(generate_snacks)
         .add_system(eat_snacks)
+        .add_system(grim_reaper)
         .run();
 }
