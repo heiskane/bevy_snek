@@ -11,11 +11,19 @@ enum Direction {
     Right,
 }
 
+#[derive(Resource)]
+struct UiFont(Handle<Font>);
+
 #[derive(Component)]
 struct Snack;
 
 #[derive(Component, Debug)]
-struct SnekBlock(i32); // Custom type for this? To share it
+struct SnekBlock(i32);
+
+#[derive(Component)]
+struct Points {
+    val: i32,
+}
 
 #[derive(Component, Debug)]
 struct Snek {
@@ -157,6 +165,7 @@ fn eat_snacks(
     mut commands: Commands,
     mut snek_block_query: Query<&mut SnekBlock>,
     mut snek_query: Query<(&mut Snek, &Transform)>,
+    mut points_query: Query<&mut Points>,
     snack_query: Query<(Entity, &Transform), With<Snack>>,
 ) {
     for (mut snek, snek_loc) in snek_query.iter_mut() {
@@ -175,6 +184,10 @@ fn eat_snacks(
                 });
                 let curr_dur = timer.0.duration();
                 timer.0.set_duration(curr_dur.mul_f32(0.97));
+
+                points_query.for_each_mut(|mut points| {
+                    points.val += 1;
+                });
             }
         }
     }
@@ -202,17 +215,58 @@ fn grim_reaper(
     })
 }
 
+fn load_font(mut commands: Commands, server: Res<AssetServer>) {
+    let handle: Handle<Font> = server.load("CascadiaCode-Regular.otf");
+    commands.insert_resource(UiFont(handle));
+    println!("Inserted font handle");
+}
+
+fn display_ui(mut commands: Commands, handle: Res<UiFont>) {
+    println!("Creating UI");
+    commands.spawn((
+        Text2dBundle {
+            text: Text::from_section(
+                "Hello World",
+                TextStyle {
+                    font: handle.0.clone(),
+                    font_size: 60.0,
+                    color: Color::BLACK,
+                },
+            ),
+            ..default()
+        },
+        Points { val: 0 },
+    ));
+}
+
+fn update_points(mut points_query: Query<(&mut Text, &Points)>, handle: Res<UiFont>) {
+    points_query.for_each_mut(|(mut txt, points)| {
+        // println!("{:?}", txt.sections);
+        *txt = Text::from_section(
+            points.val.to_string(),
+            TextStyle {
+                font: handle.0.clone(),
+                font_size: 60.0,
+                color: Color::BLACK,
+            },
+        );
+    });
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(MoveTimer(Timer::from_seconds(0.15, TimerMode::Repeating)))
+        .add_startup_system_to_stage(StartupStage::PreStartup, load_font)
         .add_startup_system(setup)
         .add_startup_system(create_snek)
         .add_startup_system(generate_snacks)
+        .add_startup_system(display_ui)
         .add_system(snek_controls)
         .add_system(snek_movement)
         .add_system(generate_snacks)
         .add_system(eat_snacks)
         .add_system(grim_reaper)
+        .add_system(update_points)
         .run();
 }
