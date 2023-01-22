@@ -30,7 +30,7 @@ struct Velocity {
     y: f32,
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 struct Points {
     val: i32,
 }
@@ -134,7 +134,6 @@ fn snek_shoot(
                 }
                 Direction::Right => {
                     projectile_velocity.x += PROJECTILE_VELOCITY;
-
                     proj_spawn.translation.x += SNEK_SIZE + 1.0;
                 }
                 Direction::Up => {
@@ -247,26 +246,26 @@ fn eat_snacks(
     mut timer: ResMut<MoveTimer>,
     mut commands: Commands,
     mut snek_block_query: Query<&mut SnekBlock>,
-    mut snek_query: Query<(&mut Snek, &Transform)>,
+    mut snek_query: Query<(&mut Snek, &Transform, &Sprite)>,
     mut points_query: Query<&mut Points>,
-    projectile_query: Query<&Transform, With<Projectile>>,
-    snack_query: Query<(Entity, &Transform), With<Snack>>,
+    projectile_query: Query<(&Transform, &Sprite), With<Projectile>>,
+    snack_query: Query<(Entity, &Transform, &Sprite), With<Snack>>,
 ) {
-    for (entity, snack) in snack_query.iter() {
-        for (mut snek, snek_loc) in snek_query.iter_mut() {
+    for (entity, snack, snack_sprite) in snack_query.iter() {
+        for (mut snek, snek_loc, snek_sprite) in snek_query.iter_mut() {
             let head_collision = collide(
                 snek_loc.translation,
-                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                snek_sprite.custom_size.unwrap(), // Should be fine right?
                 snack.translation,
-                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                snack_sprite.custom_size.unwrap(),
             );
 
-            let projectile_collision = projectile_query.iter().any(|p| {
+            let projectile_collision = projectile_query.iter().any(|(p, s)| {
                 let collision = collide(
                     p.translation,
-                    Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                    s.custom_size.unwrap(),
                     snack.translation,
-                    Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                    snack_sprite.custom_size.unwrap(),
                 );
                 collision.is_some()
             });
@@ -293,36 +292,34 @@ fn eat_snacks(
 
 fn grim_reaper(
     mut timer: ResMut<MoveTimer>,
-    snek_query: Query<&Transform, With<Snek>>,
-    proj_query: Query<&Transform, With<Projectile>>,
-    snek_block_query: Query<&Transform, With<SnekBlock>>,
+    snek_query: Query<(&Transform, &Sprite), With<Snek>>,
+    proj_query: Query<(&Transform, &Sprite), With<Projectile>>,
+    snek_block_query: Query<(&Transform, &Sprite), With<SnekBlock>>,
 ) {
-    if snek_query.is_empty() {
-        return;
-    }
-    let snek_loc = snek_query.single();
-    snek_block_query.for_each(|block| {
-        let projectile_collision = proj_query.iter().any(|p| {
-            let collision = collide(
-                p.translation,
-                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+    snek_query.for_each(|(snek_loc, snek_sprite)| {
+        snek_block_query.for_each(|(block, b_sprite)| {
+            let projectile_collision = proj_query.iter().any(|(p, p_sprite)| {
+                let collision = collide(
+                    p.translation,
+                    p_sprite.custom_size.unwrap(),
+                    block.translation,
+                    b_sprite.custom_size.unwrap(),
+                );
+                collision.is_some()
+            });
+            let body_collision = collide(
+                snek_loc.translation,
+                snek_sprite.custom_size.unwrap(),
                 block.translation,
-                Vec2::new(SNEK_SIZE, SNEK_SIZE),
-            );
-            collision.is_some()
-        });
-        let body_collision = collide(
-            snek_loc.translation,
-            Vec2::new(SNEK_SIZE, SNEK_SIZE),
-            block.translation,
-            Vec2::new(SNEK_SIZE, SNEK_SIZE),
-        )
-        .is_some();
-        if body_collision || projectile_collision {
-            println!("Game Over");
-            timer.0.pause();
-        }
-    })
+                b_sprite.custom_size.unwrap(),
+            )
+            .is_some();
+            if body_collision || projectile_collision {
+                println!("Game Over");
+                timer.0.pause();
+            }
+        })
+    });
 }
 
 fn load_font(mut commands: Commands, server: Res<AssetServer>) {
@@ -345,7 +342,7 @@ fn display_ui(mut commands: Commands, handle: Res<UiFont>) {
             ),
             ..default()
         },
-        Points { val: 0 },
+        Points::default(),
     ));
 }
 
