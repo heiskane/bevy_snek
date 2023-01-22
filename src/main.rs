@@ -135,7 +135,7 @@ fn snek_shoot(
             commands.spawn((
                 SpriteBundle {
                     sprite: Sprite {
-                        color: Color::BLACK,
+                        color: Color::GREEN,
                         custom_size: Some(Vec2::new(SNEK_SIZE, SNEK_SIZE)),
                         ..default()
                     }, // TODO: Spawn infront on snek
@@ -153,10 +153,20 @@ fn snek_shoot(
 
 fn despawn_projectiles(
     mut commands: Commands,
+    windows: Res<Windows>,
     query: Query<(Entity, &Transform), With<Projectile>>,
 ) {
-    query.for_each(|(e, transform)| {
-        todo!("despawn projectiles old");
+    let win_x = windows.primary().width() / 2.0;
+    let win_y = windows.primary().height() / 2.0;
+    query.for_each(|(e, p_loc)| {
+        if p_loc.translation.x > win_x
+            || p_loc.translation.x < -win_x
+            || p_loc.translation.y > win_y
+            || p_loc.translation.y < -win_y
+        {
+            println!("despawning projectile");
+            commands.entity(e).despawn();
+        }
     });
 }
 
@@ -270,6 +280,7 @@ fn eat_snacks(
 fn grim_reaper(
     mut timer: ResMut<MoveTimer>,
     snek_query: Query<&Transform, With<Snek>>,
+    proj_query: Query<&Transform, With<Projectile>>,
     snek_block_query: Query<&Transform, With<SnekBlock>>,
 ) {
     if snek_query.is_empty() {
@@ -277,12 +288,23 @@ fn grim_reaper(
     }
     let snek_loc = snek_query.single();
     snek_block_query.for_each(|block| {
-        if let Some(_) = collide(
+        let projectile_collision = proj_query.iter().any(|p| {
+            let collision = collide(
+                p.translation,
+                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                block.translation,
+                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+            );
+            collision.is_some()
+        });
+        let body_collision = collide(
             snek_loc.translation,
             Vec2::new(SNEK_SIZE, SNEK_SIZE),
             block.translation,
             Vec2::new(SNEK_SIZE, SNEK_SIZE),
-        ) {
+        )
+        .is_some();
+        if body_collision || projectile_collision {
             println!("Game Over");
             timer.0.pause();
         }
@@ -344,6 +366,6 @@ fn main() {
         .add_system(update_points)
         .add_system(snek_shoot)
         .add_system(apply_velocity)
-        // .add_system(despawn_projectiles)
+        .add_system(despawn_projectiles)
         .run();
 }
