@@ -19,7 +19,9 @@ struct UiFont(Handle<Font>);
 struct Snack;
 
 #[derive(Component, Debug)]
-struct SnekBlock(i32);
+struct SnekBlock {
+    ttl: i32,
+}
 
 #[derive(Component)]
 struct Projectile;
@@ -103,14 +105,14 @@ fn snek_movement(
                     transform: block_location,
                     ..default()
                 },
-                SnekBlock(snek.length),
+                SnekBlock { ttl: snek.length },
             ));
 
             for (entity, mut snek_block) in snek_block_query.iter_mut() {
-                if snek_block.0 == 1 {
+                if snek_block.ttl == 1 {
                     commands.entity(entity).despawn();
                 } else {
-                    snek_block.0 -= 1;
+                    snek_block.ttl -= 1;
                 }
             }
         }
@@ -277,7 +279,7 @@ fn eat_snacks(
                 commands.entity(entity).despawn();
                 snek.length += 1;
                 snek_block_query.for_each_mut(|mut block| {
-                    block.0 += 1;
+                    block.ttl += 1;
                 });
                 let curr_dur = timer.0.duration();
                 timer.0.set_duration(curr_dur.mul_f32(0.97));
