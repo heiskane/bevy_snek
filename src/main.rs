@@ -24,7 +24,7 @@ struct SnekBlock(i32);
 #[derive(Component)]
 struct Projectile;
 
-#[derive(Component)]
+#[derive(Component, Default)]
 struct Velocity {
     x: f32,
     y: f32,
@@ -124,13 +124,27 @@ fn snek_shoot(
 ) {
     snek_query.for_each(|(loc, snek)| {
         if key_input.just_pressed(KeyCode::Space) {
-            // TODO: Use default for this
-            let mut projectile_velocity = Velocity { x: 0.0, y: 0.0 };
+            let mut projectile_velocity = Velocity::default();
+            let mut proj_spawn = loc.clone();
+            // TODO: set Velocity relative to snek speed
             match snek.direction {
-                Direction::Left => projectile_velocity.x -= PROJECTILE_VELOCITY,
-                Direction::Right => projectile_velocity.x += PROJECTILE_VELOCITY,
-                Direction::Up => projectile_velocity.y += PROJECTILE_VELOCITY,
-                Direction::Down => projectile_velocity.y -= PROJECTILE_VELOCITY,
+                Direction::Left => {
+                    projectile_velocity.x -= PROJECTILE_VELOCITY;
+                    proj_spawn.translation.x -= SNEK_SIZE + 1.0;
+                }
+                Direction::Right => {
+                    projectile_velocity.x += PROJECTILE_VELOCITY;
+
+                    proj_spawn.translation.x += SNEK_SIZE + 1.0;
+                }
+                Direction::Up => {
+                    projectile_velocity.y += PROJECTILE_VELOCITY;
+                    proj_spawn.translation.y += SNEK_SIZE + 1.0;
+                }
+                Direction::Down => {
+                    projectile_velocity.y -= PROJECTILE_VELOCITY;
+                    proj_spawn.translation.y -= SNEK_SIZE + 1.0;
+                }
             };
             commands.spawn((
                 SpriteBundle {
@@ -138,8 +152,8 @@ fn snek_shoot(
                         color: Color::GREEN,
                         custom_size: Some(Vec2::new(SNEK_SIZE, SNEK_SIZE)),
                         ..default()
-                    }, // TODO: Spawn infront on snek
-                    transform: loc.clone(),
+                    },
+                    transform: proj_spawn,
                     ..default()
                 },
                 Projectile,
