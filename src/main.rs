@@ -2,6 +2,7 @@ use bevy::{prelude::*, sprite::collide_aabb::collide};
 use rand::{thread_rng, Rng};
 
 const SNEK_SIZE: f32 = 25.0;
+const PROJECTILE_VELOCITY: f32 = 15.0;
 
 #[derive(Component, Debug, Eq, PartialEq, Copy, Clone)]
 enum Direction {
@@ -19,6 +20,15 @@ struct Snack;
 
 #[derive(Component, Debug)]
 struct SnekBlock(i32);
+
+#[derive(Component)]
+struct Projectile;
+
+#[derive(Component)]
+struct Velocity {
+    x: f32,
+    y: f32,
+}
 
 #[derive(Component)]
 struct Points {
@@ -66,7 +76,6 @@ fn snek_movement(
 ) {
     for (mut snek, dir, mut transform) in snek_query.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
-            println!("{snek:?}");
             // Meh
             match (dir, snek.direction) {
                 (Direction::Right, Direction::Left) => (),
@@ -106,6 +115,56 @@ fn snek_movement(
             }
         }
     }
+}
+
+fn snek_shoot(
+    mut commands: Commands,
+    key_input: Res<Input<KeyCode>>,
+    snek_query: Query<(&Transform, &Snek)>,
+) {
+    snek_query.for_each(|(loc, snek)| {
+        if key_input.just_pressed(KeyCode::Space) {
+            // TODO: Use default for this
+            let mut projectile_velocity = Velocity { x: 0.0, y: 0.0 };
+            match snek.direction {
+                Direction::Left => projectile_velocity.x -= PROJECTILE_VELOCITY,
+                Direction::Right => projectile_velocity.x += PROJECTILE_VELOCITY,
+                Direction::Up => projectile_velocity.y += PROJECTILE_VELOCITY,
+                Direction::Down => projectile_velocity.y -= PROJECTILE_VELOCITY,
+            };
+            commands.spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::BLACK,
+                        custom_size: Some(Vec2::new(SNEK_SIZE, SNEK_SIZE)),
+                        ..default()
+                    }, // TODO: Spawn infront on snek
+                    transform: loc.clone(),
+                    ..default()
+                },
+                Projectile,
+                projectile_velocity,
+            ));
+
+            println!("fire!");
+        }
+    });
+}
+
+fn despawn_projectiles(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform), With<Projectile>>,
+) {
+    query.for_each(|(e, transform)| {
+        todo!("despawn projectiles old");
+    });
+}
+
+fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>) {
+    query.for_each_mut(|(mut transform, vel)| {
+        transform.translation.x += vel.x;
+        transform.translation.y += vel.y;
+    });
 }
 
 fn snek_controls(
@@ -166,16 +225,31 @@ fn eat_snacks(
     mut snek_block_query: Query<&mut SnekBlock>,
     mut snek_query: Query<(&mut Snek, &Transform)>,
     mut points_query: Query<&mut Points>,
+    projectile_query: Query<&Transform, With<Projectile>>,
     snack_query: Query<(Entity, &Transform), With<Snack>>,
 ) {
-    for (mut snek, snek_loc) in snek_query.iter_mut() {
-        for (entity, snack) in snack_query.iter() {
-            if let Some(_) = collide(
+    for (entity, snack) in snack_query.iter() {
+        for (mut snek, snek_loc) in snek_query.iter_mut() {
+            let head_collision = collide(
                 snek_loc.translation,
-                Vec2::new(snek_loc.scale.x, snek_loc.scale.y),
+                Vec2::new(SNEK_SIZE, SNEK_SIZE),
                 snack.translation,
-                Vec2::new(snack.scale.x, snack.scale.y),
-            ) {
+                Vec2::new(SNEK_SIZE, SNEK_SIZE),
+            );
+
+            let projectile_collision = projectile_query.iter().any(|p| {
+                let collision = collide(
+                    p.translation,
+                    Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                    snack.translation,
+                    Vec2::new(SNEK_SIZE, SNEK_SIZE),
+                );
+                collision.is_some()
+            });
+            if projectile_collision {
+                println!("projectile hit");
+            }
+            if head_collision.is_some() || projectile_collision {
                 println!("Eating snack");
                 commands.entity(entity).despawn();
                 snek.length += 1;
@@ -205,9 +279,9 @@ fn grim_reaper(
     snek_block_query.for_each(|block| {
         if let Some(_) = collide(
             snek_loc.translation,
-            Vec2::new(snek_loc.scale.x, snek_loc.scale.y),
+            Vec2::new(SNEK_SIZE, SNEK_SIZE),
             block.translation,
-            Vec2::new(block.scale.x, block.scale.y),
+            Vec2::new(SNEK_SIZE, SNEK_SIZE),
         ) {
             println!("Game Over");
             timer.0.pause();
@@ -268,5 +342,8 @@ fn main() {
         .add_system(eat_snacks)
         .add_system(grim_reaper)
         .add_system(update_points)
+        .add_system(snek_shoot)
+        .add_system(apply_velocity)
+        // .add_system(despawn_projectiles)
         .run();
 }
